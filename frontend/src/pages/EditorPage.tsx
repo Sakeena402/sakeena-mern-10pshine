@@ -1,60 +1,55 @@
+
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import React, { useRef, useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { useQuery, useMutation } from "@tanstack/react-query"
-import Quill from "quill"
-import "quill/dist/quill.snow.css"
 import { ArrowLeft, Trash2, Save } from "lucide-react"
+import JoditEditor from "jodit-react"
 import Button from "../components/Button"
 import { useApi } from "../hooks/useApi"
 import type { INote } from "../types"
+import "jodit/es5/jodit.min.css"
 
 export default function EditorPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { request } = useApi()
-  const editorRef = useRef<HTMLDivElement>(null)
-  const quillRef = useRef<Quill | null>(null)
+  const editor = useRef(null)
   const [title, setTitle] = useState("")
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState("")
+  const [content, setContent] = useState("")
+  const [bgColor, setBgColor] = useState("#fef5e7")
   const [isSaving, setIsSaving] = useState(false)
 
+  const isNew = !id || id === "new"
+
+  // ✅ Fetch note details if editing
   const { data: note, isLoading } = useQuery({
     queryKey: ["note", id],
     queryFn: () => request(`/notes/${id}`),
-    enabled: !!id,
+    enabled: !isNew,
   })
 
-  // Initialize Quill editor
+  // ✅ Load fetched note into state when ready
   useEffect(() => {
-    if (editorRef.current && !quillRef.current) {
-      quillRef.current = new Quill(editorRef.current, {
-        theme: "snow",
-        placeholder: "Start typing...",
-        modules: {
-          toolbar: [
-            [{ header: [1, 2, 3, false] }],
-            ["bold", "italic", "underline", "strike"],
-            ["blockquote", "code-block"],
-            [{ list: "ordered" }, { list: "bullet" }],
-            ["link", "image"],
-            ["clean"],
-          ],
-        },
-      })
-    }
-  }, [])
-
-  // Load note content
-  useEffect(() => {
-    if (note && quillRef.current) {
-      setTitle(note.title)
-      setTags(note.tags)
-      quillRef.current.root.innerHTML = note.content
+    if (note) {
+      setTitle(note.title || "")
+      setContent(note.content || "")
+      setTags(note.tags || [])
+      setBgColor(note.bgColor || "#fef5e7")
     }
   }, [note])
+
+  // ✅ Mutations for create / update
+  const createNoteMutation = useMutation({
+    mutationFn: (data: Partial<INote>) =>
+      request("/notes", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+  })
 
   const updateNoteMutation = useMutation({
     mutationFn: (data: Partial<INote>) =>
@@ -64,43 +59,101 @@ export default function EditorPage() {
       }),
   })
 
-  const handleSave = async () => {
-    if (!quillRef.current) return
+  // // ✅ Save handler
+  // const handleSave = async () => {
+  //   if (!title && !content) return
+  //   setIsSaving(true)
 
-    setIsSaving(true)
-    try {
+  //   try {
+  //     if (isNew) {
+  //       const newNote = await createNoteMutation.mutateAsync({
+  //         title: title || "Untitled Note",
+  //         content,
+  //         bgColor,
+  //         tags,
+  //       })
+  //       navigate(`/notes/${newNote._id}`)
+  //     } else {
+  //       await updateNoteMutation.mutateAsync({
+  //         title: title || "Untitled Note",
+  //         content,
+  //         bgColor,
+  //         tags,
+  //       })
+  //     }
+  //   } catch (error) {
+  //     console.error("❌ Failed to save note:", error)
+  //     alert("Failed to save note. Please try again.")
+  //   } finally {
+  //     setIsSaving(false)
+  //   }
+  // }
+
+  const handleSave = async () => {
+  if (!title && !content) return;
+  setIsSaving(true);
+
+  try {
+    if (isNew) {
+      const response = await createNoteMutation.mutateAsync({
+        title: title || "Untitled Note",
+        content,
+        bgColor,
+        tags,
+      });
+
+      // ✅ Check where your note object is returned
+      const newNote = response.note || response;
+
+      if (newNote && newNote._id) {
+        navigate(`/notes/${newNote._id}`);
+      } else {
+        console.error("❌ Note ID not found in response:", response);
+        alert("Note saved but could not open it. Please refresh the page.");
+      }
+    } else {
       await updateNoteMutation.mutateAsync({
         title: title || "Untitled Note",
-        content: quillRef.current.root.innerHTML,
+        content,
+        bgColor,
         tags,
-      })
-    } catch (error) {
-      console.error("Failed to save note:", error)
-    } finally {
-      setIsSaving(false)
+      });
     }
+  } catch (error) {
+    console.error("❌ Failed to save note:", error);
+    alert("Failed to save note. Please try again.");
+  } finally {
+    setIsSaving(false);
   }
+};
 
-  const handleAddTag = () => {
-    if (tagInput.trim() && !tags.includes(tagInput.trim())) {
-      setTags([...tags, tagInput.trim()])
-      setTagInput("")
+  // ✅ Auto-save every 5s
+  useEffect(() => {
+    if (!isNew) {
+      const timer = setTimeout(() => handleSave(), 5000)
+      return () => clearTimeout(timer)
     }
-  }
+  }, [title, content, tags, bgColor])
 
-  const handleRemoveTag = (tagToRemove: string) => {
-    setTags(tags.filter((tag) => tag !== tagToRemove))
-  }
-
+  // ✅ Delete note
   const handleDelete = async () => {
     if (confirm("Are you sure you want to delete this note?")) {
       try {
         await request(`/notes/${id}`, { method: "DELETE" })
         navigate("/notes")
       } catch (error) {
-        console.error("Failed to delete note:", error)
+        console.error("❌ Failed to delete note:", error)
       }
     }
+  }
+
+  // ✅ Jodit config
+  const config = {
+    readonly: false,
+    height: 400,
+    toolbarSticky: false,
+    showWordsCounter: false,
+    placeholder: "Start writing your note here...",
   }
 
   if (isLoading) {
@@ -112,7 +165,8 @@ export default function EditorPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen" style={{ backgroundColor: bgColor }}>
+      {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-8 py-4 flex items-center justify-between">
           <button
@@ -122,16 +176,20 @@ export default function EditorPage() {
             <ArrowLeft size={20} />
             <span className="font-medium">Back</span>
           </button>
+
           <div className="flex gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDelete}
-              className="text-red-600 border-red-200 hover:bg-red-50 bg-transparent"
-            >
-              <Trash2 size={16} className="mr-1" />
-              Delete
-            </Button>
+            {!isNew && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDelete}
+                className="text-red-600 border-red-200 hover:bg-red-50 bg-transparent"
+              >
+                <Trash2 size={16} className="mr-1" />
+                Delete
+              </Button>
+            )}
+
             <Button
               variant="primary"
               size="sm"
@@ -146,18 +204,19 @@ export default function EditorPage() {
         </div>
       </div>
 
+      {/* Content */}
       <main className="max-w-5xl mx-auto px-8 py-8">
         <div className="bg-white rounded-lg border border-gray-200 p-8 space-y-6">
-          <div>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Untitled Note"
-              className="w-full text-3xl font-serif font-bold text-gray-900 bg-transparent border-none outline-none placeholder-gray-400"
-            />
-          </div>
+          {/* Title */}
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Untitled Note"
+            className="w-full text-3xl font-serif font-bold text-gray-900 bg-transparent border-none outline-none placeholder-gray-400"
+          />
 
+          {/* Tags */}
           <div className="border-t border-gray-200 pt-6">
             <label className="block text-sm font-semibold text-gray-700 mb-3">Tags</label>
             <div className="flex flex-wrap gap-2 mb-4">
@@ -169,7 +228,7 @@ export default function EditorPage() {
                   {tag}
                   <button
                     type="button"
-                    onClick={() => handleRemoveTag(tag)}
+                    onClick={() => setTags(tags.filter((t) => t !== tag))}
                     className="hover:text-amber-900 font-bold text-lg leading-none"
                   >
                     ×
@@ -182,61 +241,40 @@ export default function EditorPage() {
                 type="text"
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && handleAddTag()}
+                onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (tagInput.trim()) {
+                            setTags([...tags, tagInput.trim()]);
+                            setTagInput("");
+                          }
+                        }
+                      }}
                 placeholder="Add a tag..."
                 className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-colors"
               />
-              <Button variant="secondary" size="sm" onClick={handleAddTag}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  if (tagInput.trim()) {
+                    setTags([...tags, tagInput.trim()])
+                    setTagInput("")
+                  }
+                }}
+              >
                 Add
               </Button>
             </div>
           </div>
 
+          {/* Editor */}
           <div className="border-t border-gray-200 pt-6">
             <label className="block text-sm font-semibold text-gray-700 mb-3">Content</label>
-            <div ref={editorRef} className="bg-white rounded-lg border border-gray-200" />
+            <JoditEditor ref={editor} value={content} config={config} onChange={setContent} />
           </div>
         </div>
       </main>
-
-      <style>{`
-        .ql-toolbar {
-          background-color: #f9fafb;
-          border: 1px solid #e5e7eb;
-          border-radius: 0.5rem 0.5rem 0 0;
-          border-bottom: 1px solid #e5e7eb;
-        }
-        .ql-container {
-          background-color: white;
-          border: none;
-          border-radius: 0 0 0.5rem 0.5rem;
-          font-family: inherit;
-        }
-        .ql-editor {
-          min-height: 400px;
-          padding: 1.5rem;
-          font-size: 1rem;
-          line-height: 1.6;
-        }
-        .ql-editor.ql-blank::before {
-          color: #d1d5db;
-          font-style: normal;
-        }
-        .ql-toolbar.ql-snow .ql-stroke {
-          stroke: #6b7280;
-        }
-        .ql-toolbar.ql-snow .ql-fill {
-          fill: #6b7280;
-        }
-        .ql-toolbar.ql-snow button:hover .ql-stroke,
-        .ql-toolbar.ql-snow button.ql-active .ql-stroke {
-          stroke: #b45309;
-        }
-        .ql-toolbar.ql-snow button:hover .ql-fill,
-        .ql-toolbar.ql-snow button.ql-active .ql-fill {
-          fill: #b45309;
-        }
-      `}</style>
     </div>
   )
 }

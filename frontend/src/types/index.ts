@@ -8,6 +8,8 @@ export interface INote {
   isDeleted: boolean
   createdAt: string
   updatedAt: string
+  pinEnabled?: boolean        
+  pinCode?: string            
 }
 
 export interface User {

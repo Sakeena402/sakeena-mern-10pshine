@@ -11,7 +11,10 @@ interface User {
 
 interface AuthContextType {
   user: User | null
-  accessToken: string | null
+   accessToken: string | null
+  setAccessToken: (token: string | null) => void
+  refreshAccessToken: () => Promise<string | null>
+  fetchWithAuth: (url: string, options?: RequestInit) => Promise<Response>
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
   signup: (username: string,email: string, password: string) => Promise<void>
@@ -22,7 +25,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
-  const [accessToken, setAccessToken] = useState<string | null>(null)
+    const [accessToken, setAccessToken] = useState<string | null>(
+    localStorage.getItem("accessToken")
+  )
   const [isLoading, setIsLoading] = useState(true)
 
   // Load from localStorage on mount
@@ -95,8 +100,67 @@ const signup = async (username: string, email: string, password: string) => {
     localStorage.removeItem("user")
   }
 
+ const refreshAccessToken = async (): Promise<string | null> => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+      })
+
+      if (!res.ok) throw new Error("Failed to refresh token")
+
+      const data = await res.json()
+      localStorage.setItem("accessToken", data.accessToken)
+      setAccessToken(data.accessToken)
+      return data.accessToken
+    } catch (err) {
+      console.error("Token refresh failed:", err)
+      setAccessToken(null)
+      localStorage.removeItem("accessToken")
+      return null
+    }
+  }
+
+  // ✅ Auto refresh token every 14 minutes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshAccessToken()
+    }, 14 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // ✅ Fetch wrapper with auto refresh
+  const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
+    const token = localStorage.getItem("accessToken")
+
+    let res = await fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        Authorization: token ? `Bearer ${token}` : "",
+      },
+      credentials: "include",
+    })
+
+    if (res.status === 401) {
+      const newToken = await refreshAccessToken()
+      if (newToken) {
+        res = await fetch(url, {
+          ...options,
+          headers: {
+            ...options.headers,
+            Authorization: `Bearer ${newToken}`,
+          },
+          credentials: "include",
+        })
+      }
+    }
+
+    return res
+  }
+
   return (
-    <AuthContext.Provider value={{ user, accessToken, isLoading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, accessToken, setAccessToken, refreshAccessToken, fetchWithAuth, isLoading, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   )
