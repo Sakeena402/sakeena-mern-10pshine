@@ -1,0 +1,50 @@
+@import "tailwindcss";
+@import "quill/dist/quill.snow.css";
+
+@theme inline {
+  --color-primary: #8b7355;
+  --color-primary-light: #a0826d;
+  --color-primary-dark: #6b5344;
+  --color-accent: #d4a574;
+  --color-accent-light: #e8c4a0;
+  --color-background: #fefdfb;
+  --color-surface: #f5f3f0;
+  --color-surface-dark: #e8e5e0;
+  --color-text: #3d3d3d;
+  --color-text-light: #6b6b6b;
+  --color-text-lighter: #9b9b9b;
+  --color-border: #e0ddd8;
+  --color-error: #d32f2f;
+  --color-success: #388e3c;
+  --font-sans: "Inter", "Inter Fallback";
+  --font-serif: "Merriweather", "Merriweather Fallback";
+  --radius: 0.5rem;
+}
+
+* {
+  @apply border-[--color-border];
+}
+
+body {
+  @apply bg-[--color-background] text-[--color-text] font-sans;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  @apply font-serif font-bold text-[--color-text];
+}
+
+button {
+  @apply transition-colors duration-200;
+}
+
+input,
+textarea {
+  @apply bg-[--color-surface] border border-[--color-border] rounded-[--radius]
+         px-3 py-2 text-[--color-text] placeholder-[--color-text-lighter]
+         focus:outline-none focus:ring-2 focus:ring-[--color-primary];
+}
