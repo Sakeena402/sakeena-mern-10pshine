@@ -1,87 +1,3 @@
-               
-
-// export const listNotes = async (req: AuthRequest, res: Response) => {
-//   try {
-//     if (!req.user) {
-//       return res.status(401).json({ success: false, message: "Not authenticated" });
-//     }
-
-//     const filters = {
-//       q: req.query.q as string,
-//       tags: req.query.tags
-//         ? (Array.isArray(req.query.tags)
-//             ? req.query.tags
-//             : (req.query.tags as string).split(","))
-//         : undefined,
-//       archived: req.query.archived ? req.query.archived === "true" : undefined,
-//       trashed: req.query.trashed ? req.query.trashed === "true" : undefined,
-//       pinned: req.query.pinned ? req.query.pinned === "true" : undefined,
-//       page: req.query.page ? Number.parseInt(req.query.page as string) : 1,
-//       limit: req.query.limit ? Number.parseInt(req.query.limit as string) : 10,
-//     };
-
-//     // ✅ pass tags and q (search text) to your service
-//     const result = await notesService.listNotes(req.user.id, filters);
-//     res.status(200).json({ success: true, ...result });
-//   } catch (error: any) {
-//     logger.error("List notes error:", error);
-//     res.status(error.status || 500).json({
-//       success: false,
-//       message: error.message || "Failed to fetch notes",
-//     });
-//   }
-// };
-
-// export const getNote = async (req: AuthRequest, res: Response) => {
-//   try {
-//     if (!req.user) {
-//       return res.status(401).json({ success: false, message: "Not authenticated" })
-//     }
-
-//     const note = await notesService.getNote(req.params.id, req.user.id)
-//     res.status(200).json({ success: true, note })
-//   } catch (error: any) {
-//     logger.error("Get note error:", error)
-//     res.status(error.status || 500).json({
-//       success: false,
-//       message: error.message || "Failed to fetch note",
-//     })
-//   }
-// }
-
-// export const createNote = async (req: AuthRequest, res: Response) => {
-//   try {
-//     if (!req.user) {
-//       return res.status(401).json({ success: false, message: "Not authenticated" })
-//     }
-
-//     const note = await notesService.createNote(req.user.id, req.body)
-//     res.status(201).json({ success: true, note })
-//   } catch (error: any) {
-//     logger.error("Create note error:", error)
-//     res.status(error.status || 500).json({
-//       success: false,
-//       message: error.message || "Failed to create note",
-//     })
-//   }
-// }
-
-// export const updateNote = async (req: AuthRequest, res: Response) => {
-//   try {
-//     if (!req.user) {
-//       return res.status(401).json({ success: false, message: "Not authenticated" })
-//     }
-
-//     const note = await notesService.updateNote(req.params.id, req.user.id, req.body)
-//     res.status(200).json({ success: true, note })
-//   } catch (error: any) {
-//     logger.error("Update note error:", error)
-//     res.status(error.status || 500).json({
-//       success: false,
-//       message: error.message || "Failed to update note",
-//     })
-//   }
-// }
 
 
 import type { Response } from "express"
@@ -260,55 +176,72 @@ export const restoreNote = async (req: AuthRequest, res: Response) => {
   }
 }
 
-export const setNotePin = async (req: AuthRequest, res: Response) => {
+// ... existing handlers (listNotes, getNote, createNote) remain
+
+// Toggle pinned state
+export const togglePin = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({ success: false, message: "Not authenticated" });
-    }
-    const note = await notesService.getNote(req.params.id, req.user.id);
-    if (!note) return res.status(404).json({ message: "Note not found" });
+    if (!req.user) return res.status(401).json({ success: false, message: "Not authenticated" });
 
-    const { enable, pinCode } = req.body;
- 
-    if (enable) {
-      if (!pinCode || pinCode.length !== 4)
-        return res.status(400).json({ message: "Invalid PIN" });
-      note.pinCode = pinCode;
-      note.pinEnabled = true;
-    } else {
-      note.pinCode = undefined;
-      note.pinEnabled = false;
-    }
-
+    const note = await notesService.findByIdAndOwner(req.params.id, req.user.id);
+    note.pinned = !note.pinned;
     await note.save();
-    res.json(note);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
+    res.status(200).json({ success: true, note });
+  } catch (err: any) {
+    logger.error("Toggle pin error:", err);
+    res.status(err.status || 500).json({ success: false, message: err.message || "Failed to toggle pin" });
   }
 };
 
+// Set or remove PIN (lock/unlock note)
+export const setNoteLock = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ success: false, message: "Not authenticated" });
 
+    const { enable, pinCode } = req.body;
+    const note = await notesService.findByIdAndOwner(req.params.id, req.user.id);
+
+    if (enable) {
+      if (!pinCode || typeof pinCode !== "string" || pinCode.length !== 4) {
+        return res.status(400).json({ success: false, message: "PIN must be a 4-digit string" });
+      }
+      await notesService.setNoteLock(req.params.id, req.user.id, pinCode, true);
+      const updated = await notesService.findByIdAndOwner(req.params.id, req.user.id); // re-fetch
+      return res.status(200).json({ success: true, note: updated });
+    } else {
+      await notesService.setNoteLock(req.params.id, req.user.id, undefined, false);
+      const updated = await notesService.findByIdAndOwner(req.params.id, req.user.id);
+      return res.status(200).json({ success: true, note: updated });
+    }
+  } catch (err: any) {
+    logger.error("Set lock error:", err);
+    res.status(err.status || 500).json({ success: false, message: err.message || "Failed to set lock" });
+  }
+};
+
+// Unlock note — verify PIN and return note if PIN correct
 export const unlockNote = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) return res.status(401).json({ success: false, message: "Not authenticated" })
+    if (!req.user) return res.status(401).json({ success: false, message: "Not authenticated" });
 
-    const { pinCode } = req.body
-    const note = await notesService.unlockNote(req.params.id, req.user.id, pinCode)
-
-    res.status(200).json({ success: true, note })
-  } catch (error: any) {
-    res.status(error.status || 500).json({
-      success: false,
-      message: error.message || "Incorrect PIN",
-    })
+    const { pinCode } = req.body;
+    const note = await notesService.verifyNotePin(req.params.id, req.user.id, pinCode);
+    return res.status(200).json({ success: true, note });
+  } catch (err: any) {
+    logger.error("Unlock note error:", err);
+    res.status(err.status || 500).json({ success: false, message: err.message || "Incorrect PIN" });
   }
-}
+};
 
-export const togglePin = async (req: AuthRequest, res: Response) => {
-  const note = await notesService.findById(req.params.id);
-  if (!note) return res.status(404).json({ message: "Note not found" });
-  note.pinned = !note.pinned;
-  await note.save();
-  res.json(note);
+// Permanent delete
+export const deleteNotePermanent = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ success: false, message: "Not authenticated" });
+
+    await notesService.deleteNotePermanent(req.params.id, req.user.id);
+    res.status(200).json({ success: true, message: "Note permanently deleted" });
+  } catch (err: any) {
+    logger.error("Permanent delete error:", err);
+    res.status(err.status || 500).json({ success: false, message: err.message || "Failed to delete note permanently" });
+  }
 };

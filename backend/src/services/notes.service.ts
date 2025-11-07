@@ -1,4 +1,5 @@
 import Note from "../models/Note"
+import bcrypt from "bcrypt";
 
 class NotesService {
   async listNotes(userId: string, filters: any) {
@@ -110,15 +111,22 @@ class NotesService {
     return note;
   }
 
-  async setNotePin(noteId: string, userId: string, pinCode?: string, enable?: boolean) {
+  async findByIdAndOwner(noteId: string, userId: string) {
+    const note = await Note.findOne({ _id: noteId, owner: userId }).select("+pinCode");
+    if (!note) throw { status: 404, message: "Note not found" };
+    return note;
+  }
+
+  // Set or remove PIN lock (stores hashed pinCode)
+  async setNoteLock(noteId: string, userId: string, pinCode?: string, enable?: boolean) {
     const note = await Note.findOne({ _id: noteId, owner: userId }).select("+pinCode");
     if (!note) throw { status: 404, message: "Note not found" };
 
     if (enable) {
-      if (!pinCode || pinCode.length !== 4) {
-        throw { status: 400, message: "PIN must be a 4-digit number" };
-      }
-      note.pinCode = pinCode;
+      // hash the PIN before storing
+      const saltRounds = 10;
+      const hash = await bcrypt.hash(pinCode!, saltRounds);
+      note.pinCode = hash;
       note.pinEnabled = true;
     } else {
       note.pinCode = undefined;
@@ -129,18 +137,24 @@ class NotesService {
     return note;
   }
 
-  async unlockNote(noteId: string, userId: string, pinCode: string) {
+  // Verify PIN — throws if invalid
+  async verifyNotePin(noteId: string, userId: string, pinCode: string) {
     const note = await Note.findOne({ _id: noteId, owner: userId }).select("+pinCode");
     if (!note) throw { status: 404, message: "Note not found" };
-    if (!note.pinEnabled) throw { status: 400, message: "Note not locked" };
-
-    if (note.pinCode !== pinCode) {
-      throw { status: 401, message: "Invalid PIN" };
-    }
-
-    return note;
+    if (!note.pinEnabled) throw { status: 400, message: "Note is not locked" };
+    const match = await bcrypt.compare(pinCode, note.pinCode || "");
+    if (!match) throw { status: 401, message: "Invalid PIN" };
+    // return note without the pinCode field (select false on pinCode will omit by default)
+    return await Note.findById(note._id);
   }
 
+  // permanent delete
+  async deleteNotePermanent(noteId: string, userId: string) {
+    const note = await Note.findOne({ _id: noteId, owner: userId });
+    if (!note) throw { status: 404, message: "Note not found" };
+    await Note.deleteOne({ _id: noteId });
+    return { success: true };
+  }
   // ✅ New helper method for controllers
   async findById(noteId: string) {
     const note = await Note.findById(noteId);
