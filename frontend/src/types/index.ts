@@ -4,6 +4,9 @@ export interface INote {
   title: string
   content: string
   tags: string[]
+  plainText: string;
+  bgColor: string;
+  pinned: boolean;
   collaborators: string[]
   isDeleted: boolean
   createdAt: string

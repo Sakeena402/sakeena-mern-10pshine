@@ -1,21 +1,22 @@
-// import mongoose, { Schema, type Document, type Types } from "mongoose"
+
+// import mongoose, { Schema, type Document, type Types } from "mongoose";
 
 // interface INote extends Document {
-//   owner: Types.ObjectId
-//   title: string
-//   content: string
-//   plainText: string
-//   bgColor: string
-//   tags: string[]
-//   pinned: boolean
-//   pinEnabled: boolean
-//   pinCode: string
-//   archived: boolean
-//   trashed: boolean
-//   collaborators: Types.ObjectId[]
-//   attachments: string[]
-//   lastEditedAt: Date
-//   version: number
+//   owner: Types.ObjectId;
+//   title: string;
+//   content: string;
+//   plainText: string;
+//   bgColor: string;
+//   tags: string[];
+//   pinned: boolean;
+//   pinEnabled: boolean;
+//   pinCode?: string;
+//   archived: boolean;
+//   trashed: boolean;
+//   collaborators: Types.ObjectId[];
+//   attachments: string[];
+//   lastEditedAt: Date;
+//   version: number;
 // }
 
 // const noteSchema = new Schema<INote>(
@@ -32,26 +33,28 @@
 //     archived: { type: Boolean, default: false },
 //     trashed: { type: Boolean, default: false },
 //     collaborators: [{ type: Schema.Types.ObjectId, ref: "User" }],
-//     attachments: [{ type: String }], // Jodit image/file attachments
+//     attachments: [{ type: String }],
 //     lastEditedAt: { type: Date, default: Date.now },
 //     version: { type: Number, default: 1 },
 //   },
 //   { timestamps: true }
-// )
+// );
 
-// noteSchema.index({ owner: 1, trashed: 1, archived: 1, pinned: 1 })
-// noteSchema.index({ title: "text", plainText: "text", tags: 1 })
-// noteSchema.virtual("tagsString").get(function () {
-//   return this.tags.join(" ");
+// // ✅ Basic filters for performance
+// noteSchema.index({ owner: 1, trashed: 1, archived: 1, pinned: 1 });
+
+// // ✅ Safe text index — exclude 'tags' array
+// noteSchema.index({
+//   title: "text",
+//   content: "text",
+//   plainText: "text"
 // });
 
-// noteSchema.index({ title: "text", content: "text", tagsString: "text" });
+// export default mongoose.model<INote>("Note", noteSchema);
 
+import mongoose, { Schema, Document, Types } from "mongoose";
 
-// export default mongoose.model<INote>("Note", noteSchema)
-import mongoose, { Schema, type Document, type Types } from "mongoose";
-
-interface INote extends Document {
+export interface INote extends Document {
   owner: Types.ObjectId;
   title: string;
   content: string;
@@ -60,7 +63,7 @@ interface INote extends Document {
   tags: string[];
   pinned: boolean;
   pinEnabled: boolean;
-  pinCode?: string;
+  pinCode?: string | null;
   archived: boolean;
   trashed: boolean;
   collaborators: Types.ObjectId[];
@@ -77,27 +80,45 @@ const noteSchema = new Schema<INote>(
     plainText: { type: String, default: "" },
     bgColor: { type: String, default: "#fef5e7" },
     tags: { type: [String], default: [] },
+
+    // 📌 Pinned notes
     pinned: { type: Boolean, default: false },
+
+    // 🔐 PIN-protected notes
     pinEnabled: { type: Boolean, default: false },
-    pinCode: { type: String, select: false },
+    pinCode: { type: String, select: false, default: null },
+
+    // 🗃️ Organization flags
     archived: { type: Boolean, default: false },
     trashed: { type: Boolean, default: false },
+
+    // 👥 Collaboration and files
     collaborators: [{ type: Schema.Types.ObjectId, ref: "User" }],
     attachments: [{ type: String }],
+
+    // 🕒 Metadata
     lastEditedAt: { type: Date, default: Date.now },
     version: { type: Number, default: 1 },
   },
   { timestamps: true }
 );
 
-// ✅ Basic filters for performance
+// ⚙️ Indexes for better query performance
 noteSchema.index({ owner: 1, trashed: 1, archived: 1, pinned: 1 });
 
-// ✅ Safe text index — exclude 'tags' array
+// 🔍 Text search (title + content + plaintext)
 noteSchema.index({
   title: "text",
   content: "text",
-  plainText: "text"
+  plainText: "text",
+});
+
+// 🧠 Auto-update "lastEditedAt" on content change
+noteSchema.pre<INote>("save", function (next) {
+  if (this.isModified("content") || this.isModified("title")) {
+    this.lastEditedAt = new Date();
+  }
+  next();
 });
 
 export default mongoose.model<INote>("Note", noteSchema);
