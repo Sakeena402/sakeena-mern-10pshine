@@ -23,6 +23,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT_KEY: Sakeena402_sakeena-mern-10pshine
+          SONAR_ORGANIZATION: Sakeena402
         with:
           projectBaseDir: ./frontend
 
@@ -40,5 +42,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets._GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT_KEY: Sakeena402_sakeena-mern-10pshine
+          SONAR_ORGANIZATION: Sakeena402
         with:
           projectBaseDir: ./backend
