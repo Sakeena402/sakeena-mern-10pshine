@@ -1,36 +1,44 @@
-name: SonarCloud Scan
+name: SonarCloud Scan (Full MERN App)
 
 on:
   push:
-    branches: [ main, develop]
+    branches:
+      - main
+      - develop
   pull_request:
     types: [opened, synchronize, reopened]
 
 jobs:
-  sonarcloud:
-    name: SonarCloud
+  frontend:
+    name: Frontend Analysis
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # important for full analysis
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 18
-
-      - name: Install dependencies
-        run: npm install
-
-
-      - name: Run build (optional)
-        run: npm run build
-
-      - name: Run SonarCloud scan
-        uses: SonarSource/sonarcloud-github-action@v2
+      - run: npm install
+        working-directory: ./frontend
+      - uses: SonarSource/sonarcloud-github-action@master
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          projectBaseDir: ./frontend
+
+  backend:
+    name: Backend Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - run: npm install
+        working-directory: ./backend
+      - uses: SonarSource/sonarcloud-github-action@master
+        env:
           GITHUB_TOKEN: ${{ secrets._GITHUB_TOKEN }}
-          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
-          SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          projectBaseDir: ./backend
