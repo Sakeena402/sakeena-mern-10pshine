@@ -1,0 +1,21 @@
+.editor-container {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  min-height: 300px;
+  padding: 1rem;
+  background-color: #fff;
+  font-family: 'Inter', sans-serif;
+}
+
+.ProseMirror {
+  outline: none;
+  min-height: 200px;
+}
+
+.ProseMirror p {
+  margin: 0.5em 0;
+}
+
+.ProseMirror strong {
+  font-weight: bold;
+}
