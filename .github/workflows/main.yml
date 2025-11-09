@@ -3,7 +3,6 @@ name: SonarCloud Scan (Backend Only)
 on:
   push:
     branches:
-      - main
       - develop
   pull_request:
     types: [opened, synchronize, reopened]
